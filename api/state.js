@@ -1,0 +1,2 @@
+import {cors,configured,get,tokenMatch} from './_shared.js';
+export default async function handler(req,res){if(cors(req,res))return;if(req.method!=='GET')return res.status(405).json({error:'Method not allowed'});if(!configured())return res.status(200).json({mode:'demo',connected:false});try{const privateView=tokenMatch(req.headers['x-mochi-key'],process.env.MOCHI_ADMIN_KEY);const s=await get();if(!privateView)delete s.players;return res.json({mode:'cloud',connected:true,state:s})}catch{return res.status(503).json({error:'Storage unavailable'})}}
