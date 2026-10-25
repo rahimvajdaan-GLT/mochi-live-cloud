@@ -1,0 +1,12 @@
+import {cors,configured,get,set,tokenMatch,applyEvent,blank} from './_shared.js';
+export default async function handler(req,res){if(cors(req,res))return;if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'});if(!tokenMatch(req.headers['x-mochi-key'],process.env.MOCHI_ADMIN_KEY))return res.status(401).json({error:'Unauthorized'});if(!configured())return res.status(503).json({error:'Cloud storage not configured'});const ev=req.body||{};if(ev.type==='reset'){await set(blank());return res.json({ok:true})}if(!['rose','gift','feed','play','rest','hello'].includes(ev.type))return res.status(400).json({error:'Unknown event'});try{const s=await get();if(!applyEvent(s,ev))return res.status(400).json({error:'Bad event'});
+// Optional AI-written, family-friendly pet dialogue. No direct viewer instructions are sent to the model.
+if(process.env.OPENAI_API_KEY && ['rose','gift','feed','play','rest','hello'].includes(ev.type)){
+ try{
+ const safeName=String(ev.user||'Friend').replace(/[^\p{L}\p{N}_ .-]/gu,'').slice(0,24);
+ const prompt=`A virtual cartoon pet named Mochi is level ${s.level}. Event type: ${ev.type}. Display name: ${safeName}. Write one cheerful original line (maximum 19 words), thanking or greeting the participant and describing Mochi's playful reaction. Never ask for gifts, payment, likes or follows. Do not repeat unsafe names. No medical or financial advice.`;
+ const controller=new AbortController();const t=setTimeout(()=>controller.abort(),4500);
+ try{const response=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4o-mini',messages:[{role:'system',content:'You are a safe family-friendly virtual pet narrator. No solicitation or personal information. Respond only with one short sentence.'},{role:'user',content:prompt}],max_tokens:65,temperature:0.7}),signal:controller.signal});if(response.ok){const data=await response.json();const line=String(data.choices?.[0]?.message?.content||'').replace(/[<>]/g,'').slice(0,160).trim();if(line){s.latest=line;s.events[0].text=line}}}finally{clearTimeout(t)}
+ }catch{/* Built-in response remains available if AI fails. */}
+}
+await set(s);return res.json({ok:true,state:s})}catch{return res.status(503).json({error:'Failed to update state'})}}
